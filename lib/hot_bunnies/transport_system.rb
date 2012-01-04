@@ -23,6 +23,7 @@ module HotBunnies
       @connections = @nodes.map do |node|
         @connection_factory.connect(:uri => node)
       end
+      nil
     end
 
     def disconnect!(timeout=5)
@@ -30,12 +31,14 @@ module HotBunnies
       @connections.each do |connection|
         connection.close(timeout)
       end
+      nil
     end
 
     def setup!
       connect!
       @exchanges = setup_exchanges!
       @queues = setup_queues!
+      nil
     end
 
     def publisher
