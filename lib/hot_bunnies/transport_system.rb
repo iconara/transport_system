@@ -7,7 +7,7 @@ module HotBunnies
   class TransportSystem
     def initialize(options={})
       @nodes = options[:nodes]
-      @connection_factory = options[:connection_factory]
+      @connection_factory = options[:connection_factory] || HotBunnies
       @exchange_name = options[:exchange_name]
       @queue_prefix = options[:queue_prefix]
       @exchange_options = options[:exchange_options] || {}
