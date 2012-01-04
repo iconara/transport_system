@@ -15,12 +15,20 @@ module HotBunnies
       @message_encoder = options[:message_encoder] || Marshal.method(:dump)
       @routing_keys = options[:routing_keys]
       @routing = options[:routing] || method(:random_routing)
+      @consumers = []
     end
 
     def connect!
       return if @connections
       @connections = @nodes.map do |node|
         @connection_factory.connect(:uri => node)
+      end
+    end
+
+    def disconnect!(timeout=5)
+      @consumers.each { |c| c.stop! }
+      @connections.each do |connection|
+        connection.close(timeout)
       end
     end
 
@@ -35,7 +43,7 @@ module HotBunnies
     end
 
     def consumer
-      Consumer.new(self)
+      Consumer.new(self).tap { |c| @consumers << c }
     end
 
     def exchanges
@@ -119,13 +127,21 @@ module HotBunnies
       @queues = @transport_system.queues
     end
 
-    def each(&consumer)
-      @subscriptions = @queues.map { |q| q.subscribe(:ack => true) }
-      @subscriptions.each { |s| s.each(:blocking => false, &consumer) }
+    def active?
+      !!@subscriptions
     end
 
-    def stop
-      @subscriptions.each { |s| s.cancel }
+    def each(&consumer)
+      @subscriptions = @queues.map { |q| q.subscribe(:ack => true) }
+      @subscriptions.each { |s| s.each(:blocking => false, :executor => @thread_pool, &consumer) }
+    end
+
+    def stop!
+      @subscriptions.each do |s|
+        s.cancel
+        s.shutdown!
+      end
+      @subscriptions = nil
     end
   end
 end

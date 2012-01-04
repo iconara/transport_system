@@ -19,6 +19,8 @@ module HotBunnies
         exchange = stub("exchange#{i}")
         subscription = stub("subscription#{i}")
         subscription.stub(:each)
+        subscription.stub(:cancel)
+        subscription.stub(:shutdown!)
         queue = stub("queue#{i}")
         queue.stub(:subscribe).with(:ack => true).and_return(subscription)
         queue.stub(:bind)
@@ -28,6 +30,7 @@ module HotBunnies
         channel.stub(:close)
         connection = stub("connection#{i}")
         connection.stub(:create_channel).and_return(channel)
+        connection.stub(:close)
         @connection_factory.stub(:connect).with(:uri => "amqp://mqhost0#{i}:5672").and_return(connection)
         @connections << connection
         @channels << channel
@@ -52,6 +55,24 @@ module HotBunnies
         @connection_factory.should_receive(:connect).with(:uri => 'amqp://mqhost01:5672')
         @connection_factory.should_receive(:connect).with(:uri => 'amqp://mqhost02:5672')
         @transport_system.connect!
+      end
+    end
+
+    describe '#disconnect!' do      
+      it 'closes all connections' do
+        @connections.each { |c| c.should_receive(:close) }
+        @transport_system.connect!
+        @transport_system.disconnect!
+      end
+
+      it 'stops all consumers' do
+        consumer1 = @transport_system.consumer
+        consumer2 = @transport_system.consumer
+        consumer1.each { |m| }
+        consumer2.each { |m| }
+        @transport_system.disconnect!
+        consumer1.should_not be_active
+        consumer2.should_not be_active
       end
     end
 
@@ -207,11 +228,28 @@ module HotBunnies
           end
         end
 
-        describe '#stop' do
+        describe '#stop!' do
           it 'cancels all subscriptions' do
             @subscriptions.each { |s| s.should_receive(:cancel) }
             @consumer.each { |m| }
-            @consumer.stop
+            @consumer.stop!
+          end
+        end
+
+        describe '#active?' do
+          it 'returns false initially' do
+            @consumer.should_not be_active
+          end
+
+          it 'returns true if there is an active subscription' do
+            @consumer.each { |m| }
+            @consumer.should be_active
+          end
+
+          it 'returns false when stopped' do
+            @consumer.each { |m| }
+            @consumer.stop!
+            @consumer.should_not be_active
           end
         end
       end
